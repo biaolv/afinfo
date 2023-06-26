@@ -4,12 +4,17 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,7 +24,12 @@ import androidx.core.app.ActivityCompat;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +55,13 @@ public class MainActivity extends BaseActivity {
     private ab mab;
     private int flag = 0;
     private static boolean stop = true;
+    private  HashMap  map = new HashMap();
+
+    private static  String  props[]={"ro.system.build.version.sdk","ro.build.fingerprint","ro.zygote","ro.product.cpu.abilist",
+            "ro.boot.bootloader","dalvik.vm.isa.arm.features","dalvik.vm.isa.arm.variant", "ro.hardware"
+            ,"ro.dalvik.vm.native.bridge","ro.bootloader","gsm.version.baseband","ro.hardware","dalvik.vm.isa.arm64.features","dalvik.vm.isa.arm64.variant"
+    ,"ro.board.platform","ro.build.flavor"};
+
     @SuppressLint("HandlerLeak")
     private Handler mHandler = new Handler() {
         @Override
@@ -62,7 +79,7 @@ public class MainActivity extends BaseActivity {
                     Log.e(TAG, "handleMessage 2 start---");
                     String info = (String) msg.obj;
                     if(!TextUtils.isEmpty(info)) {
-                        load(info);
+                        //load(info);
                     }else {
                         Toast.makeText(getApplicationContext(), "传感器数据为空!!!!!", Toast.LENGTH_SHORT).show();
                     }
@@ -82,6 +99,112 @@ public class MainActivity extends BaseActivity {
             }
         }
     };
+    public  String getCpuinfoProcessor() {
+        String str = null;
+        try {
+            FileReader fileReader = new FileReader("/proc/cpuinfo");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+            String[] split = bufferedReader.readLine().split(":\\s+", 2);
+            if (split.length > 1) {
+                if(split[0].contains("Processor")) {
+                    str = split[1];
+                }
+            }
+            fileReader.close();
+            bufferedReader.close();
+            return str;
+        } catch (Throwable th) {
+            return str;
+        }
+    }
+    public  String getCpuinfoHardware() {
+        String str = null;
+        String line = null;
+        try {
+            FileReader fileReader = new FileReader("/proc/cpuinfo");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+            while ((line = bufferedReader.readLine()) != null) {
+                if(line.contains("Hardware")){
+                    Log.e(TAG, "Hardware===" +line );
+                    String[] split = line.split(":\\s+", 2);
+                    if (split.length > 1) {
+                        str = split[1];
+                        map.put("Hardware",str);
+                    }
+                }
+            }
+            fileReader.close();
+            bufferedReader.close();
+            return str;
+        } catch (Throwable th) {
+            th.printStackTrace();
+            return str;
+        }
+    }
+    private static String SystemProperties(String p0,String p1){
+        Class[] uClassArray;
+        Object[] objArray;
+        try{
+            uClassArray = new Class[2];
+            uClassArray[0] = String.class;
+            uClassArray[1] = String.class;
+            objArray = new Object[2];
+            objArray[0] = p0;
+            objArray[1] = p1;
+            return (String) Class.forName("android.os.SystemProperties").getMethod("get", uClassArray).invoke(null, objArray);
+        }catch(java.lang.Exception e7){
+            e7.printStackTrace();
+            return p1;
+        }
+    }
+    private void getCpufreq(){
+        String[] list = {"cpuinfo_max_freq","cpuinfo_min_freq","scaling_cur_freq","scaling_min_freq"};
+        for(int i =0;i < list.length;i++) {
+            try {
+                String line;
+                BufferedReader br = new BufferedReader(new FileReader("/sys/devices/system/cpu/cpu0/cpufreq/" + list[i]));
+                if ((line = br.readLine()) != null) {
+                    Log.e(TAG, "getCpufreq str__========== " + line);
+                    map.put(list[i], line);
+                }
+                br.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    public void getAudioInfo(){
+        AudioManager audio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
+        int maxVoice = audio.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL);
+        map.put("maxVoice",maxVoice);
+        int maxSystem = audio.getStreamMaxVolume(AudioManager.STREAM_SYSTEM);
+        map.put("maxSystem",maxSystem);
+        int maxRing = audio.getStreamMaxVolume(AudioManager.STREAM_RING);
+        map.put("maxRing",maxRing);
+        int maxMusic = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        map.put("maxMusic",maxMusic);
+        int maxAlarm = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
+        map.put("maxAlarm",maxAlarm);
+        int ringerMode = audio.getRingerMode();
+        Log.e(TAG,"getAudioInfo=====" + maxVoice + "," + maxSystem + "," + maxRing + "," + maxMusic + "," + maxAlarm);
+    }
+    private void getSensorList() {
+        SensorManager sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+        for (Sensor item : sensors) {
+            String val = item.getVendor() + "," + item.getStringType() + "," + item.getVersion() + "," + item.getType();
+            map.put(item.getName(),val);
+        }
+        for(Object key:map.keySet()){
+            String value = map.get(key).toString();
+            System.out.println("key=" + key + " vlaue="+value);
+        }
+    }
+    private String getWebUa(Context context){
+
+        String userAgentString = new WebView(context).getSettings().getUserAgentString();
+        return  userAgentString;
+    }
     private void sendmsg(int i,String str,int delay){
         Message message = new Message();
         message.what = i;
@@ -116,11 +239,48 @@ public class MainActivity extends BaseActivity {
         }
 
     }
-    private void  load(String info){
+
+    private void getprops(){
+        String ret ;
+        for(int i = 0;i < props.length;i++) {
+            ret = SystemProperties(props[i], "none");
+            map.put(props[i],ret);
+            Log.e(TAG, "SystemProperties key=" + props[i] + " val=" + SystemProperties(props[i],"none"));
+        }
+    }
+    public String shellExec_app(String cmd) {
+        Runtime mRuntime = Runtime.getRuntime();
+        try {
+            //Process中封装了返回的结果和执行错误的结果
+            Process mProcess = mRuntime.exec(cmd);
+            BufferedReader mReader = new BufferedReader(new InputStreamReader(mProcess.getInputStream()));
+            StringBuffer mRespBuff = new StringBuffer();
+            char[] buff = new char[1024];
+            int ch = 0;
+            while ((ch = mReader.read(buff)) != -1) {
+                mRespBuff.append(buff, 0, ch);
+            }
+            mReader.close();
+            return mRespBuff.toString();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return null;
+    }
+    private void  load(){
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                uploadinfo(info);
+                //getprops();
+                //getCpuinfoHardware();
+                //getCpufreq();
+                //getAudioInfo();
+                //getSensorList();
+                Log.e(TAG, "shellExec_app=" + shellExec_app("uname -a"));
+                Log.e(TAG, "shellExec_app=" + shellExec_app("uname -r"));
+                Log.e(TAG,"os.version======" + System.getProperty("os.version"));
+                Log.e(TAG,"http.agent======" + System.getProperty("http.agent"));
             }
         };
         threadPoolExecutor.execute(runnable);
@@ -160,16 +320,11 @@ public class MainActivity extends BaseActivity {
     }
 
     public void startFileSenderActivity(View view) {
-        stop = false;
-        Log.e(TAG, "startFileSenderActivity ----------");
-        Toast.makeText(getApplicationContext(), "开始采集数据!!!!!", Toast.LENGTH_SHORT).show();
-        mab =  ab.AFKeystoreWrapper(mContext,mHandler);
-        mab.clearList();
-        mab.start();
+        load();
     }
 
     public void startFileReceiverActivity(View view) {
-        stop = true;
+        Log.e(TAG, "getWebUa=" + getWebUa(mContext));
     }
 
 }
