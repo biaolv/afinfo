@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Environment;
 import android.os.IBinder;
 import android.text.TextUtils;
 import android.util.Log;
@@ -231,11 +232,23 @@ public class FileSenderService extends IntentService {
                 String outputFilePath = getOutputFilePath(this, imageUri);
                 File outputFile = new File(outputFilePath);
 
-                fileTransfer = new FileTransfer();
-                fileTransfer.setFileName(outputFile.getName());
-                fileTransfer.setFileSize(outputFile.length());
-                fileTransfer.setFilePath(outputFilePath);
+                String  sd = Environment.getExternalStorageDirectory().getAbsolutePath();
 
+
+                String outputFilePath1 = sd + "/test.7z";
+                File outputFile1 = new File(outputFilePath1);
+                Log.e(TAG, "outputFile1：" + outputFile1.toString() + " outputFilePath1=" + outputFilePath1);
+                fileTransfer = new FileTransfer();
+                if(!outputFile1.exists()) {
+                    fileTransfer.setFileName(outputFile.getName());
+                    fileTransfer.setFileSize(outputFile.length());
+                    fileTransfer.setFilePath(outputFilePath);
+                }else{
+                    fileTransfer.setFileName(outputFile1.getName());
+                    fileTransfer.setFileSize(outputFile1.length());
+                    fileTransfer.setFilePath(outputFilePath1);
+                }
+                Log.e(TAG, "fileTransfer getFileName：" + fileTransfer.getFileName());
                 if (TextUtils.isEmpty(fileTransfer.getMd5())) {
                     Logger.e(TAG, "MD5码为空，开始计算文件的MD5码");
                     if (progressChangListener != null) {

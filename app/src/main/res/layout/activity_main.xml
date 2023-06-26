@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="20dp"
         android:onClick="startFileSenderActivity"
-        android:text="文件发送端" />
+        android:text="开始采集传感器" />
 
     <Button
         android:id="@+id/btn_receiver"
@@ -26,6 +26,6 @@
         android:layout_height="wrap_content"
         android:layout_margin="20dp"
         android:onClick="startFileReceiverActivity"
-        android:text="文件接收端" />
+        android:text="停止采集" />
 
 </LinearLayout>
