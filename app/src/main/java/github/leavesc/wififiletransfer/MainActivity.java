@@ -85,15 +85,7 @@ public class MainActivity extends BaseActivity {
                     }
                     break;
                 case 3:
-                    if(!stop) {
-                        Log.e(TAG, "开始新的采集----------");
-                        Toast.makeText(getApplicationContext(), "继续采集参数!!!!!", Toast.LENGTH_SHORT).show();
-                        mab = ab.AFKeystoreWrapper(mContext, mHandler);
-                        mab.clearList();
-                        mab.start();
-                    }else {
-                        Toast.makeText(getApplicationContext(), "停止采集!!!!!", Toast.LENGTH_SHORT).show();
-                    }
+                    Toast.makeText(getApplicationContext(), (CharSequence) msg.obj, Toast.LENGTH_LONG).show();
                     break;
 
             }
@@ -211,6 +203,34 @@ public class MainActivity extends BaseActivity {
         message.obj = str;
         mHandler.sendMessageDelayed(message,delay);
     }
+    private void uploadPhone(String info,String model,String cpu){
+        try {
+            OkHttpClient client = new OkHttpClient().newBuilder()
+                .build();
+            MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
+            String ss = "model=" + model + "&cpu=" + cpu + "&info=" + info;
+            RequestBody body = RequestBody.create(mediaType, ss);
+            Request request = new Request.Builder()
+                .url("http://kig.adszt.com/api/cpu/post")
+                .method("POST", body)
+                .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                .build();
+            Response response = client.newCall(request).execute();
+            String  ret = response.body().string();
+            JSONObject resultdata = JSONObject.parseObject(ret);
+            String code =  String.valueOf(resultdata.get("code"));
+            Log.e(TAG,"code=====" + code);
+            if(code.equals("0")){
+                sendmsg(3,"上传成功!!!!!",10);
+            }else{
+                sendmsg(3,"上传失败!!!!!",10);
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+            sendmsg(3,e.toString(),10);
+        }
+
+    }
     private void uploadinfo(String info){
         OkHttpClient client = new OkHttpClient().newBuilder()
                 .build();
@@ -272,15 +292,27 @@ public class MainActivity extends BaseActivity {
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
-                //getprops();
-                //getCpuinfoHardware();
-                //getCpufreq();
-                //getAudioInfo();
-                //getSensorList();
-                Log.e(TAG, "shellExec_app=" + shellExec_app("uname -a"));
-                Log.e(TAG, "shellExec_app=" + shellExec_app("uname -r"));
-                Log.e(TAG,"os.version======" + System.getProperty("os.version"));
-                Log.e(TAG,"http.agent======" + System.getProperty("http.agent"));
+                getprops();
+                String cpu = getCpuinfoHardware();
+                getCpufreq();
+                getAudioInfo();
+                getSensorList();
+                String uname_a = shellExec_app("uname -a");
+                map.put("uname_a", uname_a);
+                String uname_r = shellExec_app("uname -r");
+                map.put("uname_r", uname_r);
+                String os_version = System.getProperty("os.version");
+                map.put("os_version", os_version);
+                String http_agent = System.getProperty("http.agent");
+                map.put("http_agent", http_agent);
+                Log.e(TAG, "shellExec_app=" + uname_a);
+                Log.e(TAG, "uname_r=" + uname_r);;
+                Log.e(TAG,"http.agent======" + http_agent);
+                Log.e(TAG,"os_version======" + os_version);
+                String str =JSON.toJSONString(map);
+                Log.e(TAG, "propmap----------" + str);
+                String model = SystemProperties("ro.product.model","none");
+                uploadPhone(str,model,cpu);
             }
         };
         threadPoolExecutor.execute(runnable);
