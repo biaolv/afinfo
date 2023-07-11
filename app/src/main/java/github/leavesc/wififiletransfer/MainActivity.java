@@ -2,16 +2,25 @@ package github.leavesc.wififiletransfer;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Debug;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.os.StatFs;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.text.format.Formatter;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Display;
 import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -25,11 +34,14 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -91,47 +103,31 @@ public class MainActivity extends BaseActivity {
             }
         }
     };
-    public  String getCpuinfoProcessor() {
-        String str = null;
-        try {
-            FileReader fileReader = new FileReader("/proc/cpuinfo");
-            BufferedReader bufferedReader = new BufferedReader(fileReader);
-            String[] split = bufferedReader.readLine().split(":\\s+", 2);
-            if (split.length > 1) {
-                if(split[0].contains("Processor")) {
-                    str = split[1];
-                }
-            }
-            fileReader.close();
-            bufferedReader.close();
-            return str;
-        } catch (Throwable th) {
-            return str;
-        }
-    }
-    public  String getCpuinfoHardware() {
+    public  String getCpuinfo() {
         String str = null;
         String line = null;
         try {
             FileReader fileReader = new FileReader("/proc/cpuinfo");
             BufferedReader bufferedReader = new BufferedReader(fileReader);
             while ((line = bufferedReader.readLine()) != null) {
-                if(line.contains("Hardware")){
-                    Log.e(TAG, "Hardware===" +line );
+                if(line.contains("Processor")){
                     String[] split = line.split(":\\s+", 2);
                     if (split.length > 1) {
-                        str = split[1];
-                        map.put("Hardware",str);
+                        str = split[1] + "|";
+                    }
+                } else if(line.contains("Hardware")){
+                    String[] split = line.split(":\\s+", 2);
+                    if (split.length > 1) {
+                        str = str + split[1];
                     }
                 }
             }
             fileReader.close();
             bufferedReader.close();
-            return str;
         } catch (Throwable th) {
             th.printStackTrace();
-            return str;
         }
+        return str;
     }
     private static String SystemProperties(String p0,String p1){
         Class[] uClassArray;
@@ -151,49 +147,171 @@ public class MainActivity extends BaseActivity {
     }
     private void getCpufreq(){
         String[] list = {"cpuinfo_max_freq","cpuinfo_min_freq","scaling_cur_freq","scaling_min_freq"};
+        HashMap smap = new HashMap();
         for(int i =0;i < list.length;i++) {
             try {
                 String line;
                 BufferedReader br = new BufferedReader(new FileReader("/sys/devices/system/cpu/cpu0/cpufreq/" + list[i]));
                 if ((line = br.readLine()) != null) {
                     Log.e(TAG, "getCpufreq str__========== " + line);
-                    map.put(list[i], line);
+                    smap.put(list[i], line);
                 }
                 br.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+        map.put("cpufreq",smap);
     }
     public void getAudioInfo(){
         AudioManager audio = (AudioManager) mContext.getSystemService(Context.AUDIO_SERVICE);
         int maxVoice = audio.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL);
-        map.put("maxVoice",maxVoice);
         int maxSystem = audio.getStreamMaxVolume(AudioManager.STREAM_SYSTEM);
-        map.put("maxSystem",maxSystem);
         int maxRing = audio.getStreamMaxVolume(AudioManager.STREAM_RING);
-        map.put("maxRing",maxRing);
         int maxMusic = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        map.put("maxMusic",maxMusic);
         int maxAlarm = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM);
-        map.put("maxAlarm",maxAlarm);
         int ringerMode = audio.getRingerMode();
-        Log.e(TAG,"getAudioInfo=====" + maxVoice + "," + maxSystem + "," + maxRing + "," + maxMusic + "," + maxAlarm);
+        String audioinfo = maxVoice + "," + maxSystem + "," + maxRing + "," + maxMusic + "," + maxAlarm +  "," + ringerMode;
+        Log.e(TAG,"getAudioInfo=====" + audioinfo);
+        map.put("audioinfo",audioinfo);
     }
     private void getSensorList() {
         SensorManager sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ALL);
+        HashMap smap = new HashMap();
         for (Sensor item : sensors) {
             String val = item.getVendor() + "," + item.getStringType() + "," + item.getVersion() + "," + item.getType();
-            map.put(item.getName(),val);
+            smap.put(item.getName(),val);
         }
-        for(Object key:map.keySet()){
-            String value = map.get(key).toString();
-            System.out.println("key=" + key + " vlaue="+value);
+        map.put("sensorInfo",smap);
+    }
+    public String getSimNetWork() {
+        try {
+            TelephonyManager telephonyManager = (TelephonyManager) mContext.getSystemService(Context.TELEPHONY_SERVICE);
+            String networkCountryIso = telephonyManager.getNetworkCountryIso();
+            String networkOperatorName = telephonyManager.getNetworkOperatorName();
+            String networkOperator = telephonyManager.getNetworkOperator();
+            String simOperator = telephonyManager.getSimOperator();
+            String SimOperatorName = telephonyManager.getSimOperatorName();
+            String SimCountryIso = telephonyManager.getSimCountryIso();
+            Log.e(TAG,"networkOperatorName=" + networkOperatorName);
+            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+                return "权限获取失败";
+            }
+            String softVersion = telephonyManager.getDeviceSoftwareVersion();
+            String siminfo = simOperator + "," + SimOperatorName + "," + SimCountryIso + "," + networkOperator + "," + networkOperatorName + "," + networkCountryIso + "," + softVersion;
+            map.put("siminfo",siminfo);
+        }catch (Exception e){
+            e.printStackTrace();
         }
+        return "";
+    }
+    private void getTimeZone(){
+        TimeZone timeZone = TimeZone.getDefault();
+        String id = timeZone.getID();
+        String name = timeZone.getDisplayName(); //获取名字，如“”
+        String shotName = timeZone.getDisplayName(false, TimeZone.SHORT); //获取名字，如“GMT+08:00”
+        int time = timeZone.getOffset(System.currentTimeMillis());
+        String mTimeZone = id +  "," + name + "," + shotName + "," + time;
+        map.put("TimeZone",mTimeZone);
+        Log.e(TAG,"getTimeZone id=" + id +  " name=" + name + " shotName=" + shotName + " time=" + time);
+    }
+    private void getSsytemRomSpace() {
+        File path = Environment.getDataDirectory();
+        StatFs dataFs = new StatFs(path.getPath());
+        String dataInfo = dataFs.getBlockCountLong() + "," +  dataFs.getAvailableBlocksLong() + "," + dataFs.getFreeBlocksLong();
+        map.put("dataInfo",dataInfo);
+        String exsd = Environment.getExternalStorageDirectory().getPath();
+        StatFs exsdFs = new StatFs(exsd);
+        String exsdInfo = exsdFs.getBlockCountLong() + ","  + exsdFs.getAvailableBlocksLong() + "," +  "," + exsdFs.getFreeBlocksLong();
+        map.put("exsdInfo",exsdInfo);
+        File root = Environment.getRootDirectory();
+        StatFs rootFs = new StatFs(root.getPath());
+        String rootInfo = rootFs.getBlockCountLong() + ","  + rootFs.getAvailableBlocksLong() + "," +  "," + rootFs.getFreeBlocksLong();
+        map.put("rootInfo",rootInfo);
+    }
+    private void showBuild() {
+        HashMap smap = new HashMap();
+        smap.put("board",Build.BOARD);
+        smap.put("bootloader",Build.BOOTLOADER);
+        smap.put("brand",Build.BRAND);
+        smap.put("product",Build.PRODUCT);
+        smap.put("device",Build.DEVICE);
+        smap.put("display",Build.DISPLAY);
+        smap.put("fingerprint",Build.FINGERPRINT);
+        smap.put("hardware",Build.HARDWARE);
+        smap.put("host",Build.HOST);
+        smap.put("id",Build.ID);
+        smap.put("manufacturer",Build.MANUFACTURER);
+        smap.put("model",Build.MODEL);
+        smap.put("tags",Build.TAGS);
+        smap.put("type",Build.TYPE);
+        smap.put("user",Build.USER);
+        smap.put("time",Build.TIME);
+        smap.put("base_os",Build.VERSION.BASE_OS);
+        smap.put("sdk_int",Build.VERSION.SDK_INT);
+        smap.put("codename",Build.VERSION.CODENAME);
+        smap.put("incremental",Build.VERSION.INCREMENTAL);
+        smap.put("release",Build.VERSION.RELEASE);
+        smap.put("security",Build.VERSION.SECURITY_PATCH);
+        smap.put("sdk",Build.VERSION.SDK);
+        smap.put("radioVersion",Build.getRadioVersion());
+        Log.e(TAG, "Build.SERIAL=" + Build.SERIAL);
+        smap.put("serial",Build.SERIAL);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            smap.put("serial",Build.getSerial());
+        }
+        map.put("buildinfo",smap);
+    }
+    private String getProcMemInfo(){
+        String str = null;
+        try {
+            BufferedReader var3 = new BufferedReader(new FileReader("/proc/meminfo"), 4096);
+            String meminfo;
+            do {
+                meminfo= var3.readLine();
+                if (meminfo!= null) {
+                    String[] var10000 = meminfo.split("\\s+");
+                    if(meminfo.contains("MemTotal")){
+                        str = var10000[1] + ",";
+                    }else if(meminfo.contains("MemFree")){
+                        str = str + var10000[1] + ",";
+                    }else if(meminfo.contains("MemAvailable")){
+                        str = str + var10000[1];
+                    }
+                }
+            }
+            while(meminfo!= null);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        return  str;
+    }
+    private void getMemInfo(){
+        String mProcMeminfo = getProcMemInfo();
+        ActivityManager mActivityManager = (ActivityManager)getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo() ;
+        mActivityManager.getMemoryInfo(memoryInfo) ;
+        String ret = mProcMeminfo + "," + memoryInfo.threshold;
+        map.put("meminfo", ret);
+        Log.e(TAG,"getMemInfo ret=== " + ret);
+    }
+    private void  getlang(){
+        map.put("lang", Locale.getDefault().getDisplayLanguage());
+        map.put("lang_code", Locale.getDefault().getLanguage());
+        map.put("country", Locale.getDefault().getCountry());
+    }
+    private void getDisplayInfo(){
+        DisplayMetrics dm1 = getResources().getDisplayMetrics();
+        String info1 = dm1.density + "," + dm1.densityDpi  + "," + dm1.heightPixels  + "," +  dm1.widthPixels  + "," + dm1.scaledDensity  + ","+ dm1.xdpi  + ","+ dm1.ydpi;
+        map.put("diaplayinfo1",info1);
+        Display display = getWindowManager().getDefaultDisplay();
+        DisplayMetrics dm2 = new DisplayMetrics();
+        display.getMetrics(dm2);
+        String info2 = dm2.density + "," + dm2.densityDpi  + "," + dm2.heightPixels  + "," +  dm2.widthPixels  + "," + dm2.scaledDensity  + ","+ dm2.xdpi  + ","+ dm2.ydpi;
+        map.put("diaplayinfo2",info2);
     }
     private String getWebUa(Context context){
-
         String userAgentString = new WebView(context).getSettings().getUserAgentString();
         return  userAgentString;
     }
@@ -292,8 +410,10 @@ public class MainActivity extends BaseActivity {
         Runnable runnable = new Runnable() {
             @Override
             public void run() {
+                showBuild();
                 getprops();
-                String cpu = getCpuinfoHardware();
+                String cpu = getCpuinfo();
+                map.put("cpuinfo",cpu);
                 getCpufreq();
                 getAudioInfo();
                 getSensorList();
@@ -309,10 +429,17 @@ public class MainActivity extends BaseActivity {
                 Log.e(TAG, "uname_r=" + uname_r);;
                 Log.e(TAG,"http.agent======" + http_agent);
                 Log.e(TAG,"os_version======" + os_version);
+                String model = SystemProperties("ro.product.model","none");
+                getMemInfo();
+                getProcMemInfo();
+                getSsytemRomSpace();
+                getDisplayInfo();
+                getlang();
+                getTimeZone();
+                getSimNetWork();
                 String str =JSON.toJSONString(map);
                 Log.e(TAG, "propmap----------" + str);
-                String model = SystemProperties("ro.product.model","none");
-                uploadPhone(str,model,cpu);
+                //uploadPhone(str,model,cpu);
             }
         };
         threadPoolExecutor.execute(runnable);
@@ -348,6 +475,7 @@ public class MainActivity extends BaseActivity {
                         Manifest.permission.READ_EXTERNAL_STORAGE,
                         Manifest.permission.ACCESS_WIFI_STATE,
                         Manifest.permission.CHANGE_WIFI_STATE,
+                        Manifest.permission.READ_PHONE_STATE,
                         Manifest.permission.ACCESS_FINE_LOCATION}, CODE_REQ_PERMISSIONS);
     }
 
